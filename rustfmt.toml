@@ -1,0 +1,4 @@
+struct_field_align_threshold = 30
+enum_discrim_align_threshold = 30
+normalize_comments           = true
+wrap_comments                = true
