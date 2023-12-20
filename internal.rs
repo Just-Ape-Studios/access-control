@@ -104,3 +104,40 @@ pub trait AccessControl {
     #[ink(message)]
     fn set_role(&mut self, account_id: AccountId);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bitmap_set_bit() {
+	let mut bm = BitMap(0);
+
+	bm.set_bit(0)
+          .set_bit(1)
+	  .set_bit(127);
+
+	assert_eq!(bm.0, (1 << 127) + 2 + 1);
+    }
+
+    #[test]
+    fn test_bitmap_clear_bit() {
+	let mut bm = BitMap(u128::MAX);
+
+	bm.clear_bit(0)
+          .clear_bit(1)
+	  .clear_bit(127);
+
+	assert_eq!(bm.0, u128::MAX - (1 << 127) - 2 - 1);
+    }
+
+    #[test]
+    fn test_bitmap_has_bit_set() {
+	let bm = BitMap(0b1101u128);
+
+	assert_eq!(bm.has_bit_set(0), true);
+	assert_eq!(bm.has_bit_set(1), false);
+	assert_eq!(bm.has_bit_set(2), true);
+	assert_eq!(bm.has_bit_set(3), true);
+    }
+}
