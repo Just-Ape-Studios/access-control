@@ -37,8 +37,8 @@ impl BitMap {
     #[inline]
     /// clear_bit changes `bit` to 0
     pub fn clear_bit(&mut self, bit: u8) -> &mut Self {
-	self.0 &= !(1u128 << bit);
-	self
+        self.0 &= !(1u128 << bit);
+        self
     }
 
     #[inline]
@@ -55,7 +55,9 @@ impl AccessControlData {
         let account_roles = self
             .roles_per_account
             .get(account_id)
-            .map_or(*BitMap(0).set_bit(role), |roles| *BitMap(roles).set_bit(role));
+            .map_or(*BitMap(0).set_bit(role), |roles| {
+                *BitMap(roles).set_bit(role)
+            });
 
         self.roles_per_account.insert(account_id, &account_roles.0);
     }
@@ -87,33 +89,29 @@ mod tests {
 
     #[test]
     fn test_bitmap_set_bit() {
-	let mut bm = BitMap(0);
+        let mut bm = BitMap(0);
 
-	bm.set_bit(0)
-          .set_bit(1)
-	  .set_bit(127);
+        bm.set_bit(0).set_bit(1).set_bit(127);
 
-	assert_eq!(bm.0, (1 << 127) + 2 + 1);
+        assert_eq!(bm.0, (1 << 127) + 2 + 1);
     }
 
     #[test]
     fn test_bitmap_clear_bit() {
-	let mut bm = BitMap(u128::MAX);
+        let mut bm = BitMap(u128::MAX);
 
-	bm.clear_bit(0)
-          .clear_bit(1)
-	  .clear_bit(127);
+        bm.clear_bit(0).clear_bit(1).clear_bit(127);
 
-	assert_eq!(bm.0, u128::MAX - (1 << 127) - 2 - 1);
+        assert_eq!(bm.0, u128::MAX - (1 << 127) - 2 - 1);
     }
 
     #[test]
     fn test_bitmap_has_bit_set() {
-	let bm = BitMap(0b1101u128);
+        let bm = BitMap(0b1101u128);
 
-	assert_eq!(bm.has_bit_set(0), true);
-	assert_eq!(bm.has_bit_set(1), false);
-	assert_eq!(bm.has_bit_set(2), true);
-	assert_eq!(bm.has_bit_set(3), true);
+        assert_eq!(bm.has_bit_set(0), true);
+        assert_eq!(bm.has_bit_set(1), false);
+        assert_eq!(bm.has_bit_set(2), true);
+        assert_eq!(bm.has_bit_set(3), true);
     }
 }
