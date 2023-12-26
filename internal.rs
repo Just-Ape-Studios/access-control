@@ -1,24 +1,30 @@
-use ink::{prelude::vec, prelude::vec::Vec, primitives::AccountId, storage::Mapping};
+use ink::{primitives::AccountId, storage::Mapping};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 #[ink::storage_item]
-pub struct RolesData {
+pub struct AccessControlData {
     /// An association between an account_id and the roles it has
     /// assigned.
     ///
     /// The roles are stored in a bitmap where each bit of an u128
     /// acts as a role. If that bit is 1 the role is set, otherwise
     /// it's unset.
-    roles_per_account: Mapping<AccountId, BitMap>,
+    ///
+    /// TODO (netfox)
+    ///   consider making the roles a const generic slice of u8s.
+    ///   That way the limit of 128 roles would disappear (tho you'd
+    ///   need to worry not to store more than 16KiB of data), and the
+    ///   memory footprint for contracts that only need a few roles
+    ///   would be reduced.
+    ///
+    ///   Emulating a nested map like the following using slices
+    ///   should(???) work: mapping(account_id, mapping(idx, roles))
+    pub roles_per_account: Mapping<AccountId, u128>,
 }
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Default, scale::Encode, scale::Decode)]
-#[cfg_attr(
-    feature = "std",
-    derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
-)]
-struct BitMap(pub u128);
+#[derive(Debug, Copy, Clone, Default)]
+pub struct BitMap(pub u128);
 
 impl BitMap {
     #[inline]
@@ -64,9 +70,9 @@ impl Internal for RolesData {
         let account_roles = self
             .roles_per_account
             .get(account_id)
-            .map_or(BitMap(0), |roles| *roles.clone().set_bit(role));
+            .map_or(*BitMap(0).set_bit(role), |roles| *BitMap(roles).set_bit(role));
 
-        self.roles_per_account.insert(account_id, &account_roles);
+        self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
     fn unset_role(&mut self, account_id: AccountId, role: u8) {
@@ -75,16 +81,16 @@ impl Internal for RolesData {
         let account_roles = self
             .roles_per_account
             .get(account_id)
-            .map_or(BitMap(0), |roles| *roles.clone().clear_bit(role));
+            .map_or(BitMap(0), |roles| *BitMap(roles).clear_bit(role));
 
-        self.roles_per_account.insert(account_id, &account_roles);
+        self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
     fn has_role(&self, account_id: AccountId, role: u8) -> bool {
         assert!(role <= 127, "can only define up to 128 roles");
 
         match self.roles_per_account.get(account_id) {
-            Some(curr_roles) => curr_roles.has_bit_set(role),
+            Some(curr_roles) => BitMap(curr_roles).has_bit_set(role),
             None => false,
         }
     }
