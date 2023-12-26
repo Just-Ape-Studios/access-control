@@ -81,12 +81,6 @@ impl AccessControlData {
     }
 }
 
-#[ink::trait_definition]
-pub trait AccessControl {
-    #[ink(message)]
-    fn set_role(&mut self, account_id: AccountId);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
