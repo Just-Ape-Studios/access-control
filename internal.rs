@@ -48,23 +48,8 @@ impl BitMap {
     }
 }
 
-pub trait Internal {
-    /// set_role grants a `role` to an `account_id`.
-    fn set_role(&mut self, account_id: AccountId, role: u8);
-
-    /// unset_role denies an assigned `role` from an `account_id`.
-    fn unset_role(&mut self, account_id: AccountId, role: u8);
-
-    /// has_role returns true if `account_id` has `role` assigned,
-    /// false otherwise
-    fn has_role(&self, account_id: AccountId, role: u8) -> bool;
-
-    /// get_roles_of returns all the roles that `account_id` has assigned
-    fn get_roles_of(&self, account_id: AccountId) -> Vec<u8>;
-}
-
-impl Internal for RolesData {
-    fn set_role(&mut self, account_id: AccountId, role: u8) {
+impl AccessControlData {
+    pub fn set_role(&mut self, account_id: AccountId, role: u8) {
         assert!(role <= 127, "can only define up to 128 roles");
 
         let account_roles = self
@@ -75,7 +60,7 @@ impl Internal for RolesData {
         self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
-    fn unset_role(&mut self, account_id: AccountId, role: u8) {
+    pub fn unset_role(&mut self, account_id: AccountId, role: u8) {
         assert!(role <= 127, "can only define up to 128 roles");
 
         let account_roles = self
@@ -86,21 +71,12 @@ impl Internal for RolesData {
         self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
-    fn has_role(&self, account_id: AccountId, role: u8) -> bool {
+    pub fn has_role(&self, account_id: AccountId, role: u8) -> bool {
         assert!(role <= 127, "can only define up to 128 roles");
 
         match self.roles_per_account.get(account_id) {
             Some(curr_roles) => BitMap(curr_roles).has_bit_set(role),
             None => false,
-        }
-    }
-
-    fn get_roles_of(&self, account_id: AccountId) -> Vec<u8> {
-        match self.roles_per_account.get(account_id) {
-            Some(curr_roles) => (0..=127)
-                .filter(|role| curr_roles.has_bit_set(*role))
-                .collect(),
-            None => vec![],
         }
     }
 }
