@@ -114,4 +114,66 @@ mod tests {
         assert_eq!(bm.has_bit_set(2), true);
         assert_eq!(bm.has_bit_set(3), true);
     }
+
+    #[ink::test]
+    fn set_role_works() {
+        let mut access_control = AccessControlData::default();
+        let account = AccountId::from([1u8; 32]);
+	let (r1, r2) = (0, 1);
+
+	// set some roles and check that they have been set
+        access_control.set_role(account, r1);
+        access_control.set_role(account, r2);
+
+        let roles = access_control
+            .roles_per_account
+            .get(account)
+            .unwrap_or_else(|| panic!());
+
+        assert_eq!(roles, 3);
+    }
+
+    #[ink::test]
+    fn unset_role_works() {
+        let mut access_control = AccessControlData::default();
+        let account = AccountId::from([1u8; 32]);
+	let (r1, r2, r3, r4) = (0, 1, 2, 8);
+
+	// set some roles for testing
+        access_control.set_role(account, r1);
+        access_control.set_role(account, r2);
+        access_control.set_role(account, r3);
+
+	// unset one of the roles and check that it has been unset
+	access_control.unset_role(account, r2);
+
+	// verify that unset'ing a role that is not set doesn't do
+	// anything weird
+	access_control.unset_role(account, r4);
+
+        let roles = access_control
+            .roles_per_account
+            .get(account)
+            .unwrap_or_else(|| panic!());
+
+        assert_eq!(roles, 5);
+    }
+
+    #[ink::test]
+    fn has_role_works() {
+        let mut access_control = AccessControlData::default();
+        let account = AccountId::from([1u8; 32]);
+	let (r1, r2, r3, r4, r5) = (0, 1, 2, 3, 4);
+
+	// set some roles for testing
+        access_control.set_role(account, r1);
+        access_control.set_role(account, r2);
+        access_control.set_role(account, r5);
+
+	assert_eq!(access_control.has_role(account, r1), true);
+	assert_eq!(access_control.has_role(account, r2), true);
+	assert_eq!(access_control.has_role(account, r3), false);
+	assert_eq!(access_control.has_role(account, r4), false);
+	assert_eq!(access_control.has_role(account, r5), true);
+    }
 }
