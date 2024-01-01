@@ -1,4 +1,4 @@
-use ink::{primitives::AccountId, storage::Mapping};
+use ink::{primitives::AccountId, prelude::vec, prelude::vec::Vec, storage::Mapping};
 
 /// AccessControlData encapsulates the process of assigning roles
 /// to accounts and verifying them.
@@ -8,7 +8,7 @@ use ink::{primitives::AccountId, storage::Mapping};
 /// each account. Each byte is able to store 8 roles.
 ///
 /// E.g. AccessControlData<4> allocates inner vectors of 4 bytes,
-/// which will be able to store 8 * 4 = 32 roles )
+/// which will be able to store 8 * 4 = 32 roles
 #[derive(Debug)]
 #[ink::storage_item]
 pub struct AccessControlData<const N: usize> {
@@ -18,11 +18,25 @@ pub struct AccessControlData<const N: usize> {
     /// The roles are stored in a bitmap where each bit of an u128
     /// acts as a role. If that bit is 1 the role is set, otherwise
     /// it's unset.
-    pub roles_per_account: Mapping<AccountId, Vec<u8>>,
+    pub roles_per_account: Mapping<AccountId, BitMap>,
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, scale::Encode, scale::Decode)]
+#[cfg_attr(
+    feature = "std",
+    derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+)]
+// NOTE:
+//
+// Once we switch to ink! 5 we'll be able to replace the vector
+// with a const generic slice. The issue is that StorageLayout
+// is not implemented for [T; N] until ink! 5. Tried to implement
+// it manually but couldn't get past the issues with std.
+//
+// Related info:
+// - https://github.com/paritytech/ink/pull/1787
+// - https://github.com/paritytech/ink/issues/1785
 pub struct BitMap(Vec<u8>);
 
 impl BitMap {
@@ -75,12 +89,12 @@ impl<const N: usize> AccessControlData<N> {
 		bm.set_bit(role);
 		bm
 	    }, |roles| {
-		let mut bm = BitMap(roles).clone();
+		let mut bm = roles.clone();
 		bm.set_bit(role);
 		bm
 	    });
 
-        self.roles_per_account.insert(account_id, &account_roles.0);
+        self.roles_per_account.insert(account_id, &account_roles);
     }
 
     pub fn unset_role(&mut self, account_id: AccountId, role: usize) {
@@ -88,17 +102,17 @@ impl<const N: usize> AccessControlData<N> {
             .roles_per_account
             .get(account_id)
             .map_or(BitMap::new(N), |roles| {
-		let mut bm = BitMap(roles).clone();
+		let mut bm = roles.clone();
 		bm.clear_bit(role);
 		bm
 	    });
 
-        self.roles_per_account.insert(account_id, &account_roles.0);
+        self.roles_per_account.insert(account_id, &account_roles);
     }
 
     pub fn has_role(&self, account_id: AccountId, role: usize) -> bool {
         match self.roles_per_account.get(account_id) {
-            Some(curr_roles) => BitMap(curr_roles).has_bit_set(role),
+            Some(curr_roles) => curr_roles.has_bit_set(role),
             None => false,
         }
     }
@@ -157,7 +171,7 @@ mod tests {
             .get(account)
             .unwrap_or_else(|| panic!());
 
-        assert_eq!(roles, [3, 0, 0, 0]);
+        assert_eq!(roles.0, [3, 0, 0, 0]);
     }
 
     #[ink::test]
@@ -183,7 +197,7 @@ mod tests {
             .get(account)
             .unwrap_or_else(|| panic!());
 
-        assert_eq!(roles, [5, 0, 0, 0]);
+        assert_eq!(roles.0, [5, 0, 0, 0]);
     }
 
     #[ink::test]
