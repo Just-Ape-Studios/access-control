@@ -1,32 +1,35 @@
 use ink::{primitives::AccountId, storage::Mapping};
 
-#[derive(Debug, Default)]
+/// AccessControlData encapsulates the process of assigning roles
+/// to accounts and verifying them.
+///
+/// The generic const `N` represents the static size in bytes of the
+/// inner vector that will be used to store the roles associated with
+/// each account. Each byte is able to store 8 roles.
+///
+/// E.g. AccessControlData<4> allocates inner vectors of 4 bytes,
+/// which will be able to store 8 * 4 = 32 roles )
+#[derive(Debug)]
 #[ink::storage_item]
-pub struct AccessControlData {
+pub struct AccessControlData<const N: usize> {
     /// An association between an account_id and the roles it has
     /// assigned.
     ///
     /// The roles are stored in a bitmap where each bit of an u128
     /// acts as a role. If that bit is 1 the role is set, otherwise
     /// it's unset.
-    ///
-    /// TODO (netfox)
-    ///   consider making the roles a const generic slice of u8s.
-    ///   That way the limit of 128 roles would disappear (tho you'd
-    ///   need to worry not to store more than 16KiB of data), and the
-    ///   memory footprint for contracts that only need a few roles
-    ///   would be reduced.
-    ///
-    ///   Emulating a nested map like the following using slices
-    ///   should(???) work: mapping(account_id, mapping(idx, roles))
-    pub roles_per_account: Mapping<AccountId, [u8; 4]>,
+    pub roles_per_account: Mapping<AccountId, Vec<u8>>,
 }
 
 #[repr(transparent)]
-#[derive(Debug, Copy, Clone, Default)]
-pub struct BitMap([u8; 4]);
+#[derive(Debug, Clone, Default)]
+pub struct BitMap(Vec<u8>);
 
 impl BitMap {
+    pub fn new(sz: usize) -> Self {
+	BitMap(vec![0u8; sz])
+    }
+
     #[inline]
     /// set_bit changes the bit at `pos` to 1
     pub fn set_bit(&mut self, pos: usize) -> &mut Self {
@@ -54,34 +57,46 @@ impl BitMap {
     }
 }
 
-impl AccessControlData {
-    pub fn set_role(&mut self, account_id: AccountId, role: usize) {
-        assert!(role <= 127, "can only define up to 128 roles");
+impl<const N: usize> AccessControlData<N> {
+    pub fn new() -> Self {
+	const { assert!(N <= 32, "N generic const can't be greater than 32"); }
 
+	AccessControlData {
+	    roles_per_account: Mapping::new()
+	}
+    }
+
+    pub fn set_role(&mut self, account_id: AccountId, role: usize) {
         let account_roles = self
             .roles_per_account
             .get(account_id)
-            .map_or(*BitMap([0u8; 4]).set_bit(role), |roles| {
-                *BitMap(roles).set_bit(role)
-            });
+            .map_or_else(|| {
+		let mut bm = BitMap::new(N);
+		bm.set_bit(role);
+		bm
+	    }, |roles| {
+		let mut bm = BitMap(roles).clone();
+		bm.set_bit(role);
+		bm
+	    });
 
         self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
     pub fn unset_role(&mut self, account_id: AccountId, role: usize) {
-        assert!(role <= 127, "can only define up to 128 roles");
-
         let account_roles = self
             .roles_per_account
             .get(account_id)
-            .map_or(BitMap([0u8; 4]), |roles| *BitMap(roles).clear_bit(role));
+            .map_or(BitMap::new(N), |roles| {
+		let mut bm = BitMap(roles).clone();
+		bm.clear_bit(role);
+		bm
+	    });
 
         self.roles_per_account.insert(account_id, &account_roles.0);
     }
 
     pub fn has_role(&self, account_id: AccountId, role: usize) -> bool {
-        assert!(role <= 127, "can only define up to 128 roles");
-
         match self.roles_per_account.get(account_id) {
             Some(curr_roles) => BitMap(curr_roles).has_bit_set(role),
             None => false,
@@ -95,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_bitmap_set_bit() {
-        let mut bm = BitMap([0u8; 4]);
+        let mut bm = BitMap([0u8; 4].into());
 
         bm.set_bit(0).set_bit(1).set_bit(31);
 
@@ -107,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_bitmap_clear_bit() {
-        let mut bm = BitMap([u8::MAX; 4]);
+        let mut bm = BitMap([u8::MAX; 4].into());
 
         bm.clear_bit(0).clear_bit(1).clear_bit(31);
 
@@ -119,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_bitmap_has_bit_set() {
-        let bm = BitMap([6, 2, 0, 0]);
+        let bm = BitMap([6, 2, 0, 0].into());
 
         assert_eq!(bm.has_bit_set(0), false);
         assert_eq!(bm.has_bit_set(1), true);
@@ -129,7 +144,7 @@ mod tests {
 
     #[ink::test]
     fn set_role_works() {
-        let mut access_control = AccessControlData::default();
+        let mut access_control = AccessControlData::<4>::new();
         let account = AccountId::from([1u8; 32]);
 	let (r1, r2) = (0, 1);
 
@@ -147,7 +162,7 @@ mod tests {
 
     #[ink::test]
     fn unset_role_works() {
-        let mut access_control = AccessControlData::default();
+        let mut access_control = AccessControlData::<4>::new();
         let account = AccountId::from([1u8; 32]);
 	let (r1, r2, r3, r4) = (0, 1, 2, 8);
 
@@ -173,7 +188,7 @@ mod tests {
 
     #[ink::test]
     fn has_role_works() {
-        let mut access_control = AccessControlData::default();
+        let mut access_control = AccessControlData::<4>::new();
         let account = AccountId::from([1u8; 32]);
 	let (r1, r2, r3, r4, r5) = (0, 1, 2, 3, 4);
 
