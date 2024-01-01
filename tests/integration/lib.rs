@@ -6,17 +6,17 @@ mod integration {
 
     #[ink(storage)]
     pub struct Integration {
-        access_control: AccessControlData,
+        access_control: AccessControlData<4>,
         value:          bool,
     }
 
     impl Integration {
-        const ROLE_1: u8 = 0;
+        const ROLE_1: usize = 0;
 
         #[ink(constructor)]
         pub fn new(value: bool) -> Self {
             let caller = Self::env().caller();
-            let mut access_control = AccessControlData::default();
+            let mut access_control = AccessControlData::<4>::new();
 
             access_control.set_role(caller, Self::ROLE_1);
 
