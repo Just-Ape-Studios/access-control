@@ -13,12 +13,12 @@ use ink::{primitives::AccountId, prelude::vec, prelude::vec::Vec, storage::Mappi
 #[ink::storage_item]
 pub struct AccessControlData<const N: usize> {
     /// An association between an account_id and the roles it has
-    /// assigned.
-    ///
-    /// The roles are stored in a bitmap where each bit of an u128
-    /// acts as a role. If that bit is 1 the role is set, otherwise
-    /// it's unset.
+    /// assigned. Only serves the purpose of checking whenever the
+    /// account has the role, but doesn't give authorization to that
+    /// account to set the role for other accounts
     pub roles_per_account: Mapping<AccountId, BitMap>,
+
+    pub admin_roles_per_account: Mapping<AccountId, BitMap>,
 }
 
 #[repr(transparent)]
@@ -71,16 +71,36 @@ impl BitMap {
     }
 }
 
+#[derive(Debug)]
+pub enum AccessControlError {
+    CallerIsNotAdmin
+}
+
 impl<const N: usize> AccessControlData<N> {
-    pub fn new() -> Self {
+    const DEFAULT_ADMIN_ROLE: usize = 0;
+
+    pub fn new(admin: AccountId) -> Self {
 	const { assert!(N <= 32, "N generic const can't be greater than 32"); }
 
+	let mut roles_bm = BitMap::new(N);
+	roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE);
+
+	let mut admin_roles = Mapping::new();
+	admin_roles.insert(admin, &roles_bm);
+
 	AccessControlData {
-	    roles_per_account: Mapping::new()
+	    roles_per_account: Mapping::new(),
+	    admin_roles_per_account: admin_roles,
 	}
     }
 
-    pub fn set_role(&mut self, account_id: AccountId, role: usize) {
+    pub fn set_role(&mut self, caller: AccountId, account_id: AccountId, role: usize) -> Result<(), AccessControlError> {
+	assert!(role > 0, "role id must be greater than 0");
+
+	if !self.has_admin_role(caller, role) && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE) {
+	    return Err(AccessControlError::CallerIsNotAdmin);
+	}
+
         let account_roles = self
             .roles_per_account
             .get(account_id)
@@ -95,9 +115,16 @@ impl<const N: usize> AccessControlData<N> {
 	    });
 
         self.roles_per_account.insert(account_id, &account_roles);
+	Ok(())
     }
 
-    pub fn unset_role(&mut self, account_id: AccountId, role: usize) {
+    pub fn unset_role(&mut self, caller: AccountId, account_id: AccountId, role: usize) -> Result<(), AccessControlError> {
+	assert!(role > 0, "role id must be greater than 0");
+
+	if !self.has_admin_role(caller, role) && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE) {
+	    return Err(AccessControlError::CallerIsNotAdmin);
+	}
+
         let account_roles = self
             .roles_per_account
             .get(account_id)
@@ -108,10 +135,18 @@ impl<const N: usize> AccessControlData<N> {
 	    });
 
         self.roles_per_account.insert(account_id, &account_roles);
+	Ok(())
     }
 
     pub fn has_role(&self, account_id: AccountId, role: usize) -> bool {
         match self.roles_per_account.get(account_id) {
+            Some(curr_roles) => curr_roles.has_bit_set(role),
+            None => false,
+        }
+    }
+
+    pub fn has_admin_role(&self, account_id: AccountId, role: usize) -> bool {
+        match self.admin_roles_per_account.get(account_id) {
             Some(curr_roles) => curr_roles.has_bit_set(role),
             None => false,
         }
@@ -158,58 +193,61 @@ mod tests {
 
     #[ink::test]
     fn set_role_works() {
-        let mut access_control = AccessControlData::<4>::new();
+        let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
-	let (r1, r2) = (0, 1);
+        let mut access_control = AccessControlData::<4>::new(caller);
+	let (r1, r2) = (1, 2);
 
 	// set some roles and check that they have been set
-        access_control.set_role(account, r1);
-        access_control.set_role(account, r2);
+        access_control.set_role(caller, account, r1).unwrap();
+        access_control.set_role(caller, account, r2).unwrap();
 
         let roles = access_control
             .roles_per_account
             .get(account)
             .unwrap_or_else(|| panic!());
 
-        assert_eq!(roles.0, [3, 0, 0, 0]);
+        assert_eq!(roles.0, [6, 0, 0, 0]);
     }
 
     #[ink::test]
     fn unset_role_works() {
-        let mut access_control = AccessControlData::<4>::new();
+        let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
-	let (r1, r2, r3, r4) = (0, 1, 2, 8);
+        let mut access_control = AccessControlData::<4>::new(caller);
+	let (r1, r2, r3, r4) = (1, 2, 3, 8);
 
 	// set some roles for testing
-        access_control.set_role(account, r1);
-        access_control.set_role(account, r2);
-        access_control.set_role(account, r3);
+        access_control.set_role(caller, account, r1).unwrap();
+        access_control.set_role(caller, account, r2).unwrap();
+        access_control.set_role(caller, account, r3).unwrap();
 
 	// unset one of the roles and check that it has been unset
-	access_control.unset_role(account, r2);
+	access_control.unset_role(caller, account, r2).unwrap();
 
 	// verify that unset'ing a role that is not set doesn't do
 	// anything weird
-	access_control.unset_role(account, r4);
+	access_control.unset_role(caller, account, r4).unwrap();
 
         let roles = access_control
             .roles_per_account
             .get(account)
             .unwrap_or_else(|| panic!());
 
-        assert_eq!(roles.0, [5, 0, 0, 0]);
+        assert_eq!(roles.0, [10, 0, 0, 0]);
     }
 
     #[ink::test]
     fn has_role_works() {
-        let mut access_control = AccessControlData::<4>::new();
+        let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
-	let (r1, r2, r3, r4, r5) = (0, 1, 2, 3, 4);
+        let mut access_control = AccessControlData::<4>::new(caller);
+	let (r1, r2, r3, r4, r5) = (1, 2, 3, 4, 5);
 
 	// set some roles for testing
-        access_control.set_role(account, r1);
-        access_control.set_role(account, r2);
-        access_control.set_role(account, r5);
+        access_control.set_role(caller, account, r1).unwrap();
+        access_control.set_role(caller, account, r2).unwrap();
+        access_control.set_role(caller, account, r5).unwrap();
 
 	assert_eq!(access_control.has_role(account, r1), true);
 	assert_eq!(access_control.has_role(account, r2), true);
