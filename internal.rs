@@ -1,4 +1,4 @@
-use ink::{primitives::AccountId, prelude::vec, prelude::vec::Vec, storage::Mapping};
+use ink::{prelude::vec, prelude::vec::Vec, primitives::AccountId, storage::Mapping};
 
 /// AccessControlData encapsulates the process of assigning roles
 /// to accounts and verifying them.
@@ -41,14 +41,14 @@ pub struct BitMap(Vec<u8>);
 
 impl BitMap {
     pub fn new(sz: usize) -> Self {
-	BitMap(vec![0u8; sz])
+        BitMap(vec![0u8; sz])
     }
 
     #[inline]
     /// set_bit changes the bit at `pos` to 1
     pub fn set_bit(&mut self, pos: usize) -> &mut Self {
-	let idx = pos / 8;
-	let off = pos % 8;
+        let idx = pos / 8;
+        let off = pos % 8;
         self.0[idx] |= 1u8 << off;
         self
     }
@@ -56,8 +56,8 @@ impl BitMap {
     #[inline]
     /// clear_bit changes the bit at `pos` to 0
     pub fn clear_bit(&mut self, pos: usize) -> &mut Self {
-	let idx = pos / 8;
-	let off = pos % 8;
+        let idx = pos / 8;
+        let off = pos % 8;
         self.0[idx] &= !(1u8 << off);
         self
     }
@@ -65,77 +65,93 @@ impl BitMap {
     #[inline]
     /// has_bit_set returns true if the bit at `pos` is 1, false otherwise
     pub fn has_bit_set(&self, pos: usize) -> bool {
-	let idx = pos / 8;
-	let off = pos % 8;
+        let idx = pos / 8;
+        let off = pos % 8;
         (self.0[idx] & (1 << off)) > 0
     }
 }
 
 #[derive(Debug)]
 pub enum AccessControlError {
-    CallerIsNotAdmin
+    CallerIsNotAdmin,
 }
 
 impl<const N: usize> AccessControlData<N> {
     const DEFAULT_ADMIN_ROLE: usize = 0;
 
     pub fn new(admin: AccountId) -> Self {
-	const { assert!(N <= 32, "N generic const can't be greater than 32"); }
+        const {
+            assert!(N <= 32, "N generic const can't be greater than 32");
+        }
 
-	let mut roles_bm = BitMap::new(N);
-	roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE);
+        let mut roles_bm = BitMap::new(N);
+        roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE);
 
-	let mut admin_roles = Mapping::new();
-	admin_roles.insert(admin, &roles_bm);
+        let mut admin_roles = Mapping::new();
+        admin_roles.insert(admin, &roles_bm);
 
-	AccessControlData {
-	    roles_per_account: Mapping::new(),
-	    admin_roles_per_account: admin_roles,
-	}
+        AccessControlData {
+            roles_per_account:       Mapping::new(),
+            admin_roles_per_account: admin_roles,
+        }
     }
 
-    pub fn set_role(&mut self, caller: AccountId, account_id: AccountId, role: usize) -> Result<(), AccessControlError> {
-	assert!(role > 0, "role id must be greater than 0");
+    pub fn set_role(
+        &mut self,
+        caller: AccountId,
+        account_id: AccountId,
+        role: usize,
+    ) -> Result<(), AccessControlError> {
+        assert!(role > 0, "role id must be greater than 0");
 
-	if !self.has_admin_role(caller, role) && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE) {
-	    return Err(AccessControlError::CallerIsNotAdmin);
-	}
+        if !self.has_admin_role(caller, role)
+            && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE)
+        {
+            return Err(AccessControlError::CallerIsNotAdmin);
+        }
 
-        let account_roles = self
-            .roles_per_account
-            .get(account_id)
-            .map_or_else(|| {
-		let mut bm = BitMap::new(N);
-		bm.set_bit(role);
-		bm
-	    }, |roles| {
-		let mut bm = roles.clone();
-		bm.set_bit(role);
-		bm
-	    });
+        let account_roles = self.roles_per_account.get(account_id).map_or_else(
+            || {
+                let mut bm = BitMap::new(N);
+                bm.set_bit(role);
+                bm
+            },
+            |roles| {
+                let mut bm = roles.clone();
+                bm.set_bit(role);
+                bm
+            },
+        );
 
         self.roles_per_account.insert(account_id, &account_roles);
-	Ok(())
+        Ok(())
     }
 
-    pub fn unset_role(&mut self, caller: AccountId, account_id: AccountId, role: usize) -> Result<(), AccessControlError> {
-	assert!(role > 0, "role id must be greater than 0");
+    pub fn unset_role(
+        &mut self,
+        caller: AccountId,
+        account_id: AccountId,
+        role: usize,
+    ) -> Result<(), AccessControlError> {
+        assert!(role > 0, "role id must be greater than 0");
 
-	if !self.has_admin_role(caller, role) && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE) {
-	    return Err(AccessControlError::CallerIsNotAdmin);
-	}
+        if !self.has_admin_role(caller, role)
+            && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE)
+        {
+            return Err(AccessControlError::CallerIsNotAdmin);
+        }
 
-        let account_roles = self
-            .roles_per_account
-            .get(account_id)
-            .map_or(BitMap::new(N), |roles| {
-		let mut bm = roles.clone();
-		bm.clear_bit(role);
-		bm
-	    });
+        let account_roles =
+            self.roles_per_account
+                .get(account_id)
+                .map_or(BitMap::new(N), |roles| {
+                    let mut bm = roles.clone();
+                    bm.clear_bit(role);
+                    bm
+                });
 
         self.roles_per_account.insert(account_id, &account_roles);
-	Ok(())
+        Ok(())
     }
 
     pub fn has_role(&self, account_id: AccountId, role: usize) -> bool {
@@ -163,10 +179,10 @@ mod tests {
 
         bm.set_bit(0).set_bit(1).set_bit(31);
 
-	assert_eq!(bm.0[0], 3);
-	assert_eq!(bm.0[1], 0);
-	assert_eq!(bm.0[2], 0);
-	assert_eq!(bm.0[3], 128);
+        assert_eq!(bm.0[0], 3);
+        assert_eq!(bm.0[1], 0);
+        assert_eq!(bm.0[2], 0);
+        assert_eq!(bm.0[3], 128);
     }
 
     #[test]
@@ -175,10 +191,10 @@ mod tests {
 
         bm.clear_bit(0).clear_bit(1).clear_bit(31);
 
-	assert_eq!(bm.0[0], u8::MAX - 2 - 1);
-	assert_eq!(bm.0[1], u8::MAX);
-	assert_eq!(bm.0[2], u8::MAX);
-	assert_eq!(bm.0[3], 127);
+        assert_eq!(bm.0[0], u8::MAX - 2 - 1);
+        assert_eq!(bm.0[1], u8::MAX);
+        assert_eq!(bm.0[2], u8::MAX);
+        assert_eq!(bm.0[3], 127);
     }
 
     #[test]
@@ -196,9 +212,9 @@ mod tests {
         let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
         let mut access_control = AccessControlData::<4>::new(caller);
-	let (r1, r2) = (1, 2);
+        let (r1, r2) = (1, 2);
 
-	// set some roles and check that they have been set
+        // set some roles and check that they have been set
         access_control.set_role(caller, account, r1).unwrap();
         access_control.set_role(caller, account, r2).unwrap();
 
@@ -215,19 +231,19 @@ mod tests {
         let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
         let mut access_control = AccessControlData::<4>::new(caller);
-	let (r1, r2, r3, r4) = (1, 2, 3, 8);
+        let (r1, r2, r3, r4) = (1, 2, 3, 8);
 
-	// set some roles for testing
+        // set some roles for testing
         access_control.set_role(caller, account, r1).unwrap();
         access_control.set_role(caller, account, r2).unwrap();
         access_control.set_role(caller, account, r3).unwrap();
 
-	// unset one of the roles and check that it has been unset
-	access_control.unset_role(caller, account, r2).unwrap();
+        // unset one of the roles and check that it has been unset
+        access_control.unset_role(caller, account, r2).unwrap();
 
-	// verify that unset'ing a role that is not set doesn't do
-	// anything weird
-	access_control.unset_role(caller, account, r4).unwrap();
+        // verify that unset'ing a role that is not set doesn't do
+        // anything weird
+        access_control.unset_role(caller, account, r4).unwrap();
 
         let roles = access_control
             .roles_per_account
@@ -242,17 +258,17 @@ mod tests {
         let caller = AccountId::from([0u8; 32]);
         let account = AccountId::from([1u8; 32]);
         let mut access_control = AccessControlData::<4>::new(caller);
-	let (r1, r2, r3, r4, r5) = (1, 2, 3, 4, 5);
+        let (r1, r2, r3, r4, r5) = (1, 2, 3, 4, 5);
 
-	// set some roles for testing
+        // set some roles for testing
         access_control.set_role(caller, account, r1).unwrap();
         access_control.set_role(caller, account, r2).unwrap();
         access_control.set_role(caller, account, r5).unwrap();
 
-	assert_eq!(access_control.has_role(account, r1), true);
-	assert_eq!(access_control.has_role(account, r2), true);
-	assert_eq!(access_control.has_role(account, r3), false);
-	assert_eq!(access_control.has_role(account, r4), false);
-	assert_eq!(access_control.has_role(account, r5), true);
+        assert_eq!(access_control.has_role(account, r1), true);
+        assert_eq!(access_control.has_role(account, r2), true);
+        assert_eq!(access_control.has_role(account, r3), false);
+        assert_eq!(access_control.has_role(account, r4), false);
+        assert_eq!(access_control.has_role(account, r5), true);
     }
 }
