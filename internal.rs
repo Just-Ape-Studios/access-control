@@ -1,5 +1,8 @@
 use ink::{prelude::vec, prelude::vec::Vec, primitives::AccountId, storage::Mapping};
 
+/// internal type of a role
+pub type Role = u64;
+
 /// AccessControlData encapsulates the process of assigning roles
 /// to accounts and verifying them.
 ///
@@ -77,7 +80,8 @@ impl BitMap {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
+#[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum AccessControlError {
     CallerIsNotAdmin,
 }
