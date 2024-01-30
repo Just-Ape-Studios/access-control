@@ -167,6 +167,10 @@ impl<const N: usize> AccessControlData<N> {
         }
     }
 
+    pub fn set_admin_role(&mut self, role: Role, admin_role: Role) {
+        self.admin_role_per_role.insert(role, &admin_role);
+    }
+
     pub fn can_assign_role(&self, account_id: AccountId, role: Role) -> bool {
         let admin_role_of_role = self
             .admin_role_per_role
