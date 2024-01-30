@@ -87,7 +87,7 @@ pub enum AccessControlError {
 }
 
 impl<const N: usize> AccessControlData<N> {
-    const DEFAULT_ADMIN_ROLE: usize = 0;
+    const DEFAULT_ADMIN_ROLE: Role = 0;
 
     pub fn new(admin: AccountId) -> Self {
         const {
@@ -95,7 +95,7 @@ impl<const N: usize> AccessControlData<N> {
         }
 
         let mut roles_bm = BitMap::new(N);
-        roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE);
+        roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE as usize);
 
         let mut admin_roles = Mapping::new();
         admin_roles.insert(admin, &roles_bm);
@@ -110,7 +110,7 @@ impl<const N: usize> AccessControlData<N> {
         &mut self,
         caller: AccountId,
         account_id: AccountId,
-        role: usize,
+        role: Role,
     ) -> Result<(), AccessControlError> {
         assert!(role > 0, "role id must be greater than 0");
 
@@ -123,12 +123,12 @@ impl<const N: usize> AccessControlData<N> {
         let account_roles = self.roles_per_account.get(account_id).map_or_else(
             || {
                 let mut bm = BitMap::new(N);
-                bm.set_bit(role);
+                bm.set_bit(role as usize);
                 bm
             },
             |roles| {
                 let mut bm = roles.clone();
-                bm.set_bit(role);
+                bm.set_bit(role as usize);
                 bm
             },
         );
@@ -141,7 +141,7 @@ impl<const N: usize> AccessControlData<N> {
         &mut self,
         caller: AccountId,
         account_id: AccountId,
-        role: usize,
+        role: Role,
     ) -> Result<(), AccessControlError> {
         assert!(role > 0, "role id must be greater than 0");
 
@@ -156,7 +156,7 @@ impl<const N: usize> AccessControlData<N> {
                 .get(account_id)
                 .map_or(BitMap::new(N), |roles| {
                     let mut bm = roles.clone();
-                    bm.clear_bit(role);
+                    bm.clear_bit(role as usize);
                     bm
                 });
 
@@ -164,16 +164,16 @@ impl<const N: usize> AccessControlData<N> {
         Ok(())
     }
 
-    pub fn has_role(&self, account_id: AccountId, role: usize) -> bool {
+    pub fn has_role(&self, account_id: AccountId, role: Role) -> bool {
         match self.roles_per_account.get(account_id) {
-            Some(curr_roles) => curr_roles.has_bit_set(role),
+            Some(curr_roles) => curr_roles.has_bit_set(role as usize),
             None => false,
         }
     }
 
-    pub fn has_admin_role(&self, account_id: AccountId, role: usize) -> bool {
+    pub fn has_admin_role(&self, account_id: AccountId, role: Role) -> bool {
         match self.admin_roles_per_account.get(account_id) {
-            Some(curr_roles) => curr_roles.has_bit_set(role),
+            Some(curr_roles) => curr_roles.has_bit_set(role as usize),
             None => false,
         }
     }
