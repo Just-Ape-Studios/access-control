@@ -34,9 +34,15 @@ pub struct AccessControlData<const N: usize> {
 // is not implemented for [T; N] until ink! 5. Tried to implement
 // it manually but couldn't get past the issues with std.
 //
+// Another option for ink! 5 is to use `StorageVec`, which is
+// a non-packed version of `Vec`. With `StorageVec` we can store
+// vectors not constrained by size without worrying about going
+// above 16MiB in size. ( or so I assume, only looked at the PR ;) )
+//
 // Related info:
-// - https://github.com/paritytech/ink/pull/1787
-// - https://github.com/paritytech/ink/issues/1785
+// - `[T;N]` https://github.com/paritytech/ink/pull/1787
+// - `[T;N]` https://github.com/paritytech/ink/issues/1785
+// - `StorageVec` https://github.com/paritytech/ink/pull/1995
 pub struct BitMap(Vec<u8>);
 
 impl BitMap {
