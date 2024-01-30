@@ -2,7 +2,7 @@
 
 #[ink::contract]
 mod integration {
-    use access_control::AccessControlData;
+    use access_control::{AccessControlData, Role};
 
     #[ink(storage)]
     pub struct Integration {
@@ -11,14 +11,16 @@ mod integration {
     }
 
     impl Integration {
-        const ROLE_1: usize = 0;
+        const ROLE_1: Role = 1;
 
         #[ink(constructor)]
         pub fn new(value: bool) -> Self {
             let caller = Self::env().caller();
-            let mut access_control = AccessControlData::<4>::new();
+            let mut access_control = AccessControlData::<4>::new(caller);
 
-            access_control.set_role(caller, Self::ROLE_1);
+            if let Err(e) = access_control.set_role(caller, caller, Self::ROLE_1) {
+                panic!("{:?}", e);
+            }
 
             Self {
                 value,

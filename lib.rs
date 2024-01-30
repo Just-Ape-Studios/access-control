@@ -2,10 +2,9 @@
 #![feature(inline_const)]
 
 mod internal;
-pub use internal::AccessControlData;
+pub use internal::{AccessControlData, AccessControlError, Role};
 
 use ink::primitives::AccountId;
-use internal::{AccessControlError, Role};
 
 #[ink::trait_definition]
 pub trait AccessControl {

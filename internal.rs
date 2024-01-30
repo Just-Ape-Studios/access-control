@@ -15,13 +15,13 @@ pub type Role = u64;
 #[derive(Debug)]
 #[ink::storage_item]
 pub struct AccessControlData<const N: usize> {
-    /// An association between an account_id and the roles it has
-    /// assigned. Only serves the purpose of checking whenever the
-    /// account has the role, but doesn't give authorization to that
-    /// account to set the role for other accounts
+    /// An association between an `AccountId` and the roles it has
+    /// assigned.
     pub roles_per_account: Mapping<AccountId, BitMap>,
 
-    pub admin_roles_per_account: Mapping<AccountId, BitMap>,
+    /// An association between a role and the admin role that manages
+    /// that role.
+    pub admin_role_per_role: Mapping<Role, Role>,
 }
 
 #[repr(transparent)]
@@ -83,7 +83,7 @@ impl BitMap {
 #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
 #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum AccessControlError {
-    CallerIsNotAdmin,
+    Unauthorized,
 }
 
 impl<const N: usize> AccessControlData<N> {
@@ -97,12 +97,12 @@ impl<const N: usize> AccessControlData<N> {
         let mut roles_bm = BitMap::new(N);
         roles_bm.set_bit(Self::DEFAULT_ADMIN_ROLE as usize);
 
-        let mut admin_roles = Mapping::new();
-        admin_roles.insert(admin, &roles_bm);
+        let mut roles = Mapping::new();
+        roles.insert(admin, &roles_bm);
 
         AccessControlData {
-            roles_per_account:       Mapping::new(),
-            admin_roles_per_account: admin_roles,
+            roles_per_account:   roles,
+            admin_role_per_role: Mapping::new(),
         }
     }
 
@@ -114,10 +114,8 @@ impl<const N: usize> AccessControlData<N> {
     ) -> Result<(), AccessControlError> {
         assert!(role > 0, "role id must be greater than 0");
 
-        if !self.has_admin_role(caller, role)
-            && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE)
-        {
-            return Err(AccessControlError::CallerIsNotAdmin);
+        if !self.can_assign_role(caller, role) {
+            return Err(AccessControlError::Unauthorized);
         }
 
         let account_roles = self.roles_per_account.get(account_id).map_or_else(
@@ -145,10 +143,8 @@ impl<const N: usize> AccessControlData<N> {
     ) -> Result<(), AccessControlError> {
         assert!(role > 0, "role id must be greater than 0");
 
-        if !self.has_admin_role(caller, role)
-            && !self.has_admin_role(caller, Self::DEFAULT_ADMIN_ROLE)
-        {
-            return Err(AccessControlError::CallerIsNotAdmin);
+        if !self.can_assign_role(caller, role) {
+            return Err(AccessControlError::Unauthorized);
         }
 
         let account_roles =
@@ -171,11 +167,13 @@ impl<const N: usize> AccessControlData<N> {
         }
     }
 
-    pub fn has_admin_role(&self, account_id: AccountId, role: Role) -> bool {
-        match self.admin_roles_per_account.get(account_id) {
-            Some(curr_roles) => curr_roles.has_bit_set(role as usize),
-            None => false,
-        }
+    pub fn can_assign_role(&self, account_id: AccountId, role: Role) -> bool {
+        let admin_role_of_role = self
+            .admin_role_per_role
+            .get(role)
+            .unwrap_or(Self::DEFAULT_ADMIN_ROLE);
+
+        self.has_role(account_id, admin_role_of_role)
     }
 }
 
